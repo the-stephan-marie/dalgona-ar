@@ -1,0 +1,24 @@
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Model files (uncomment if you don't want to track large model files)
+# models/*.glb
+# models/*.usdz
+
+# Temporary files
+*.tmp
+*.temp
+

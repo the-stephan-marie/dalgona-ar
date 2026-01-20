@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="WebXR AR Experience with Model Viewer">
+    <title>WebXR AR Model Viewer</title>
+    
+    <!-- Preconnect to improve performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Model Viewer Script -->
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js"></script>
+    
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>WebXR AR Experience</h1>
+            <p>View 3D models in AR on your mobile device</p>
+        </header>
+        
+        <main>
+            <div class="model-container">
+                <model-viewer
+                    src="models/Dalgona-OneTake_0004.glb"
+                    ios-src="models/Dalgona-OneTake_0004.usdz"
+                    alt="Dalgona OneTake Model"
+                    ar
+                    ar-modes="webxr scene-viewer quick-look"
+                    ar-scale="auto"
+                    ar-placement="floor"
+                    camera-controls
+                    auto-rotate
+                    autoplay
+                    animation-name="animation_0"
+                    shadow-intensity="1"
+                    exposure="1"
+                    environment-image="neutral"
+                    style="width: 100%; height: 500px; background-color: #f0f0f0;">
+                    
+                    <button slot="ar-button" class="ar-button">
+                        View in AR
+                    </button>
+                    
+                    <div slot="poster" class="poster">
+                        <div class="poster-content">
+                            <p>Loading 3D Model...</p>
+                        </div>
+                    </div>
+                </model-viewer>
+            </div>
+            
+            <div class="info">
+                <h2>How to Use</h2>
+                <ul>
+                    <li><strong>Android:</strong> Click "View in AR" to open in ARCore Scene Viewer</li>
+                    <li><strong>iOS:</strong> Click "View in AR" to open in AR Quick Look</li>
+                    <li><strong>Desktop:</strong> Use mouse/trackpad to rotate and zoom the model</li>
+                </ul>
+                
+                <div class="notes">
+                    <h3>Notes:</h3>
+                    <ul>
+                        <li>Model files: <code>Dalgona-OneTake_0004.glb</code> and <code>Dalgona-OneTake_0004.usdz</code></li>
+                        <li>Animation track: <code>animation_0</code></li>
+                        <li>Place both model files in the <code>models/</code> folder</li>
+                        <li>The animation will autoplay when the model loads</li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+        
+        <footer>
+            <p>Powered by <a href="https://modelviewer.dev/" target="_blank">model-viewer</a></p>
+        </footer>
+    </div>
+</body>
+</html>
+
