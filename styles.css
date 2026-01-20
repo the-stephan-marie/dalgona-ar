@@ -107,10 +107,12 @@ body {
 }
 
 /* Show when WebXR AR session is active */
+/* Note: CSS attribute selectors work, but JavaScript inline styles override them */
+/* So we rely primarily on JavaScript to show/hide, but CSS provides fallback */
 model-viewer[ar-status="session-started"] #webxr-banner,
 model-viewer[ar-status="object-placed"] #webxr-banner,
 model-viewer[ar-status="presenting"] #webxr-banner {
-    display: flex;
+    display: flex !important;
 }
 
 .banner-content {
