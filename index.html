@@ -59,6 +59,17 @@
                 </div>
             </div>
         </model-viewer>
+        
+        <!-- On-screen Console for AR Touch Detection -->
+        <div id="ar-console" class="ar-console">
+            <div class="console-header">
+                <h3>AR Touch Console</h3>
+                <button id="console-clear" class="console-clear-btn">Clear</button>
+            </div>
+            <div id="console-content" class="console-content">
+                <div class="console-entry">Ready for AR touches...</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -287,6 +298,285 @@
                 }, 100);
             }
         });
+
+        // ============================================
+        // AR RAYCAST TOUCH DETECTION WITH VISUALIZATION
+        // ============================================
+        
+        let THREE = null;
+        let raycaster = null;
+        let scene = null;
+        let camera = null;
+        let renderer = null;
+        let rayLines = [];
+        let isInARMode = false;
+        let hierarchyNodes = [];
+        
+        // Console elements
+        const arConsole = document.getElementById('ar-console');
+        const consoleContent = document.getElementById('console-content');
+        const consoleClearBtn = document.getElementById('console-clear');
+        
+        // Initialize Three.js and raycasting
+        async function initializeRaycasting() {
+            if (!window.THREE) {
+                THREE = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js');
+                window.THREE = THREE;
+            } else {
+                THREE = window.THREE;
+            }
+            
+            raycaster = new THREE.Raycaster();
+            console.log('✅ Three.js and Raycaster initialized');
+            addConsoleEntry('✅ Raycasting initialized', 'success');
+        }
+        
+        // Setup hit detection when model loads
+        modelViewer.addEventListener('load', () => {
+            setupHitDetection();
+        });
+        
+        modelViewer.addEventListener('scene-graph-ready', () => {
+            setupHitDetection();
+        });
+        
+        function setupHitDetection() {
+            if (!THREE) {
+                initializeRaycasting().then(() => {
+                    setupHitDetection();
+                });
+                return;
+            }
+            
+            if (!modelViewer.loaded) {
+                modelViewer.addEventListener('load', setupHitDetection, { once: true });
+                return;
+            }
+            
+            try {
+                // Access model hierarchy
+                const symbols = Object.getOwnPropertySymbols(modelViewer.model);
+                const hierarchySym = symbols.find(s => s.toString().includes('hierarchy'));
+                
+                if (hierarchySym) {
+                    const hierarchy = modelViewer.model[hierarchySym];
+                    hierarchyNodes = hierarchy.filter(node => node.mesh);
+                    console.log('✅ Found', hierarchyNodes.length, 'nodes with meshes');
+                    addConsoleEntry(`✅ Found ${hierarchyNodes.length} interactive objects`, 'success');
+                    
+                    // Get scene and camera from model-viewer
+                    if (modelViewer.renderRoot) {
+                        const canvas = modelViewer.renderRoot.querySelector('canvas');
+                        if (canvas && canvas.__THREE__) {
+                            scene = canvas.__THREE__.scene;
+                            camera = canvas.__THREE__.camera;
+                            renderer = canvas.__THREE__.renderer;
+                            console.log('✅ Got Three.js scene, camera, and renderer from model-viewer');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error setting up hit detection:', error);
+                addConsoleEntry('❌ Error setting up hit detection: ' + error.message, 'error');
+            }
+        }
+        
+        // Find hit object using raycasting
+        function findHitObject(clientX, clientY) {
+            if (!raycaster || !camera || !hierarchyNodes.length || !scene) {
+                return null;
+            }
+            
+            const rect = modelViewer.getBoundingClientRect();
+            const x = ((clientX - rect.left) / rect.width) * 2 - 1;
+            const y = -((clientY - rect.top) / rect.height) * 2 + 1;
+            
+            // Update camera from model-viewer's camera
+            if (modelViewer.renderRoot) {
+                const canvas = modelViewer.renderRoot.querySelector('canvas');
+                if (canvas && canvas.__THREE__) {
+                    const threeCamera = canvas.__THREE__.camera;
+                    if (threeCamera) {
+                        camera.position.copy(threeCamera.position);
+                        camera.quaternion.copy(threeCamera.quaternion);
+                        camera.updateMatrixWorld();
+                    }
+                }
+            }
+            
+            raycaster.setFromCamera(new THREE.Vector2(x, y), camera);
+            
+            // Get all meshes from hierarchy
+            const meshes = hierarchyNodes
+                .map(node => node.mesh)
+                .filter(mesh => mesh && mesh.isMesh);
+            
+            const intersects = raycaster.intersectObjects(meshes, true);
+            
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const hitMesh = hit.object;
+                
+                // Find which node this mesh belongs to
+                const hitNode = hierarchyNodes.find(node => {
+                    if (node.mesh === hitMesh) return true;
+                    let parent = hitMesh.parent;
+                    while (parent) {
+                        if (node.mesh === parent) return true;
+                        parent = parent.parent;
+                    }
+                    return false;
+                });
+                
+                return {
+                    node: hitNode,
+                    mesh: hitMesh,
+                    point: hit.point,
+                    distance: hit.distance,
+                    name: hitNode?.name || hitMesh.name || 'Unknown'
+                };
+            }
+            
+            return null;
+        }
+        
+        // Create visual ray
+        function createRayVisual(startPoint, endPoint, hit = false) {
+            if (!THREE || !scene) return null;
+            
+            const geometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(startPoint.x, startPoint.y, startPoint.z),
+                new THREE.Vector3(endPoint.x, endPoint.y, endPoint.z)
+            ]);
+            
+            const material = new THREE.LineBasicMaterial({
+                color: hit ? 0x00ff00 : 0xff0000,
+                linewidth: 3,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+            rayLines.push(line);
+            
+            // Remove ray after 1 second
+            setTimeout(() => {
+                if (scene && line.parent) {
+                    scene.remove(line);
+                    line.geometry.dispose();
+                    line.material.dispose();
+                }
+                const index = rayLines.indexOf(line);
+                if (index > -1) rayLines.splice(index, 1);
+            }, 1000);
+            
+            return line;
+        }
+        
+        // Add entry to console
+        function addConsoleEntry(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `console-entry console-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            consoleContent.insertBefore(entry, consoleContent.firstChild);
+            
+            // Keep only last 20 entries
+            while (consoleContent.children.length > 20) {
+                consoleContent.removeChild(consoleContent.lastChild);
+            }
+        }
+        
+        // Clear console
+        consoleClearBtn.addEventListener('click', () => {
+            consoleContent.innerHTML = '<div class="console-entry">Console cleared...</div>';
+        });
+        
+        // Handle touches/clicks in AR mode
+        function handleARTouch(event) {
+            if (!isInARMode) return;
+            
+            // Prevent default to avoid conflicts
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Get touch/click coordinates
+            let clientX, clientY;
+            if (event.touches && event.touches.length > 0) {
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else if (event.changedTouches && event.changedTouches.length > 0) {
+                clientX = event.changedTouches[0].clientX;
+                clientY = event.changedTouches[0].clientY;
+            } else {
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+            
+            // Find hit object
+            const hit = findHitObject(clientX, clientY);
+            
+            if (hit && camera && scene) {
+                // Create ray visual
+                const cameraPos = camera.position.clone();
+                const hitPoint = hit.point;
+                createRayVisual(cameraPos, hitPoint, true);
+                
+                // Log to console
+                addConsoleEntry(`✅ HIT: ${hit.name} (distance: ${hit.distance.toFixed(2)}m)`, 'success');
+                console.log('🎯 AR Touch Hit:', hit);
+            } else {
+                // Miss - create ray to far point
+                if (camera && scene) {
+                    const cameraPos = camera.position.clone();
+                    const direction = new THREE.Vector3();
+                    camera.getWorldDirection(direction);
+                    const farPoint = cameraPos.clone().add(direction.multiplyScalar(10));
+                    createRayVisual(cameraPos, farPoint, false);
+                    
+                    addConsoleEntry('❌ MISS: No object hit', 'error');
+                }
+            }
+        }
+        
+        // Listen for AR status to enable/disable touch detection
+        modelViewer.addEventListener('ar-status', (event) => {
+            const status = event.detail.status;
+            const mode = event.detail.mode;
+            
+            if ((status === 'presenting' || status === 'session-started' || status === 'object-placed') && 
+                mode === 'webxr') {
+                isInARMode = true;
+                arConsole.style.display = 'block';
+                addConsoleEntry('AR Mode Active - Touch detection enabled', 'success');
+                
+                // Add event listeners for AR touches
+                modelViewer.addEventListener('click', handleARTouch);
+                modelViewer.addEventListener('touchstart', handleARTouch);
+                modelViewer.addEventListener('touchend', handleARTouch);
+            } else {
+                isInARMode = false;
+                arConsole.style.display = 'none';
+                
+                // Remove event listeners
+                modelViewer.removeEventListener('click', handleARTouch);
+                modelViewer.removeEventListener('touchstart', handleARTouch);
+                modelViewer.removeEventListener('touchend', handleARTouch);
+                
+                // Clean up ray visuals
+                rayLines.forEach(line => {
+                    if (scene && line.parent) {
+                        scene.remove(line);
+                        line.geometry.dispose();
+                        line.material.dispose();
+                    }
+                });
+                rayLines = [];
+            }
+        });
+        
+        // Initialize raycasting on page load
+        initializeRaycasting();
     </script>
 </body>
 </html>
