@@ -197,22 +197,14 @@
             const mode = event.detail.mode || 'unknown';
             const banner = document.getElementById('webxr-banner');
             
-            console.log('AR Status:', status, 'Mode:', mode, 'Banner element:', banner);
+            console.log('AR Status:', status, 'Mode:', mode);
             
-            // Show banner when WebXR AR session is active
-            // WebXR runs in browser, so HTML overlays work
-            // Quick Look and Scene Viewer are native apps, so HTML overlays don't work
+            // Enable features whenever AR is active - don't gatekeep based on mode detection
             if (status === 'session-started' || status === 'object-placed' || status === 'presenting') {
-                // Check if it's WebXR mode
-                const isWebXR = mode === 'webxr' || (!mode && status === 'presenting');
-                
-                console.log('AR active - isWebXR:', isWebXR, 'status:', status, 'mode:', mode);
-                
-                if (isWebXR && banner) {
-                    // Use requestAnimationFrame to ensure overlay container is ready
+                // Show banner - will work in WebXR, won't show in native apps (which is fine)
+                if (banner) {
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
-                            console.log('Showing WebXR banner');
                             banner.style.display = 'flex';
                             banner.style.position = 'fixed';
                             banner.style.bottom = '20px';
@@ -229,15 +221,10 @@
                             banner.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.2)';
                         });
                     });
-                } else {
-                    // Hide for native AR apps (Quick Look, Scene Viewer)
-                    console.log('Hiding banner - not WebXR mode');
-                    if (banner) banner.style.display = 'none';
                 }
             } else if (status === 'not-presenting' || 
                        status === 'session-ended' ||
                        status === 'failed') {
-                console.log('Hiding banner - AR session ended');
                 if (banner) banner.style.display = 'none';
             }
         });
@@ -362,22 +349,37 @@
                     const hierarchy = modelViewer.model[hierarchySym];
                     hierarchyNodes = hierarchy.filter(node => node.mesh);
                     console.log('✅ Found', hierarchyNodes.length, 'nodes with meshes');
-                    addConsoleEntry(`✅ Found ${hierarchyNodes.length} interactive objects`, 'success');
+                    if (arConsole && arConsole.style.display !== 'none') {
+                        addConsoleEntry(`✅ Found ${hierarchyNodes.length} interactive objects`, 'success');
+                    }
                     
-                    // Get scene and camera from model-viewer
-                    if (modelViewer.renderRoot) {
-                        const canvas = modelViewer.renderRoot.querySelector('canvas');
-                        if (canvas && canvas.__THREE__) {
-                            scene = canvas.__THREE__.scene;
-                            camera = canvas.__THREE__.camera;
-                            renderer = canvas.__THREE__.renderer;
-                            console.log('✅ Got Three.js scene, camera, and renderer from model-viewer');
+                    // Get scene and camera from model-viewer - try multiple times if needed
+                    function getSceneAndCamera() {
+                        if (modelViewer.renderRoot) {
+                            const canvas = modelViewer.renderRoot.querySelector('canvas');
+                            if (canvas && canvas.__THREE__) {
+                                scene = canvas.__THREE__.scene;
+                                camera = canvas.__THREE__.camera;
+                                renderer = canvas.__THREE__.renderer;
+                                console.log('✅ Got Three.js scene, camera, and renderer from model-viewer');
+                                return true;
+                            }
                         }
+                        return false;
+                    }
+                    
+                    if (!getSceneAndCamera()) {
+                        // Retry after a short delay
+                        setTimeout(() => {
+                            getSceneAndCamera();
+                        }, 500);
                     }
                 }
             } catch (error) {
                 console.error('Error setting up hit detection:', error);
-                addConsoleEntry('❌ Error setting up hit detection: ' + error.message, 'error');
+                if (arConsole && arConsole.style.display !== 'none') {
+                    addConsoleEntry('❌ Error setting up hit detection: ' + error.message, 'error');
+                }
             }
         }
         
@@ -442,7 +444,20 @@
         
         // Create visual ray
         function createRayVisual(startPoint, endPoint, hit = false) {
-            if (!THREE || !scene) return null;
+            if (!THREE) return null;
+            
+            // Ensure we have access to scene
+            if (!scene && modelViewer.renderRoot) {
+                const canvas = modelViewer.renderRoot.querySelector('canvas');
+                if (canvas && canvas.__THREE__) {
+                    scene = canvas.__THREE__.scene;
+                }
+            }
+            
+            if (!scene) {
+                console.warn('Scene not available for ray visualization');
+                return null;
+            }
             
             const geometry = new THREE.BufferGeometry().setFromPoints([
                 new THREE.Vector3(startPoint.x, startPoint.y, startPoint.z),
@@ -451,16 +466,16 @@
             
             const material = new THREE.LineBasicMaterial({
                 color: hit ? 0x00ff00 : 0xff0000,
-                linewidth: 3,
+                linewidth: 5,
                 transparent: true,
-                opacity: 0.8
+                opacity: 0.9
             });
             
             const line = new THREE.Line(geometry, material);
             scene.add(line);
             rayLines.push(line);
             
-            // Remove ray after 1 second
+            // Remove ray after 2 seconds (longer visibility)
             setTimeout(() => {
                 if (scene && line.parent) {
                     scene.remove(line);
@@ -469,7 +484,7 @@
                 }
                 const index = rayLines.indexOf(line);
                 if (index > -1) rayLines.splice(index, 1);
-            }, 1000);
+            }, 2000);
             
             return line;
         }
@@ -540,23 +555,35 @@
         }
         
         // Listen for AR status to enable/disable touch detection
+        // Don't gatekeep - enable whenever AR is active regardless of mode detection
         modelViewer.addEventListener('ar-status', (event) => {
             const status = event.detail.status;
-            const mode = event.detail.mode;
             
-            if ((status === 'presenting' || status === 'session-started' || status === 'object-placed') && 
-                mode === 'webxr') {
+            // Enable whenever AR is active - don't check mode
+            if (status === 'presenting' || status === 'session-started' || status === 'object-placed') {
                 isInARMode = true;
-                arConsole.style.display = 'block';
+                
+                // Show console
+                if (arConsole) {
+                    arConsole.style.display = 'block';
+                    arConsole.style.zIndex = '100001';
+                    arConsole.style.visibility = 'visible';
+                    arConsole.style.opacity = '1';
+                }
+                
                 addConsoleEntry('AR Mode Active - Touch detection enabled', 'success');
                 
                 // Add event listeners for AR touches
-                modelViewer.addEventListener('click', handleARTouch);
-                modelViewer.addEventListener('touchstart', handleARTouch);
-                modelViewer.addEventListener('touchend', handleARTouch);
+                modelViewer.addEventListener('click', handleARTouch, { passive: false });
+                modelViewer.addEventListener('touchstart', handleARTouch, { passive: false });
+                modelViewer.addEventListener('touchend', handleARTouch, { passive: false });
             } else {
                 isInARMode = false;
-                arConsole.style.display = 'none';
+                
+                // Hide console
+                if (arConsole) {
+                    arConsole.style.display = 'none';
+                }
                 
                 // Remove event listeners
                 modelViewer.removeEventListener('click', handleARTouch);

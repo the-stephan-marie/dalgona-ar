@@ -257,15 +257,17 @@ model-viewer[ar-status="presenting"] #webxr-banner {
     width: 320px;
     max-width: calc(100vw - 40px);
     max-height: 400px;
-    background: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.9);
     backdrop-filter: blur(10px);
     border-radius: 10px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    z-index: 100000;
+    z-index: 100001 !important;
     font-family: 'Courier New', 'Monaco', monospace;
     font-size: 12px;
     color: #fff;
     overflow: hidden;
+    visibility: visible;
+    opacity: 1;
 }
 
 .console-header {
