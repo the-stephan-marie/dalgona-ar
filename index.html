@@ -13,8 +13,9 @@
 <body>
     <div class="model-container">
         <model-viewer
+            id="model-viewer"
             src="models/Dalgona-OneTake_0004.glb"
-            ios-src="models/Dalgona-OneTake_0004.usdz"
+            ios-src=""
             alt="Dalgona OneTake Model"
             ar
             ar-modes="webxr scene-viewer quick-look"
@@ -39,7 +40,161 @@
                 </div>
             </div>
         </model-viewer>
+        
+        <!-- WebXR Banner for Android -->
+        <div class="webxr-banner" id="webxr-banner">
+            <div class="banner-content">
+                <div class="banner-text">
+                    <h3 class="banner-title">Dalgona Coffee with Nescafe</h3>
+                    <p class="banner-subtitle">Discover 30 days of Nescafe recipes this Ramadan.</p>
+                </div>
+                <button class="banner-button" id="banner-action-button">
+                    Try Now
+                </button>
+            </div>
+        </div>
     </div>
+
+    <script>
+        // iOS Quick Look Banner Configuration
+        const iosBannerConfig = {
+            // Generic Banner Options
+            callToAction: "Try Now",
+            checkoutTitle: "Dalgona Coffee with Nescafe",
+            checkoutSubtitle: "Discover 30 days of Nescafe recipes this Ramadan.",
+            price: "",
+            canonicalWebPageURL: window.location.href,
+            
+            // Custom HTML Banner Options (alternative to generic)
+            // Uncomment to use custom HTML banner instead
+            // custom: "https://example.com/banner.html",
+            // customHeight: "medium" // small, medium, or large
+        };
+
+        // WebXR Banner Configuration for Android
+        const webxrBannerConfig = {
+            title: "Dalgona OneTake",
+            subtitle: "Experience this 3D model in AR",
+            buttonText: "Learn More",
+            actionURL: window.location.href, // URL to navigate to when button is clicked
+            // Custom action function (optional - overrides actionURL)
+            // onButtonClick: function() { console.log('Custom action'); }
+        };
+
+        // Build iOS USDZ URL with banner parameters
+        function buildIOSQuickLookURL() {
+            const baseURL = "models/Dalgona-OneTake_0004.usdz";
+            const params = [];
+            
+            // Use custom HTML banner if specified
+            if (iosBannerConfig.custom) {
+                params.push(`custom=${encodeURIComponent(iosBannerConfig.custom)}`);
+                if (iosBannerConfig.customHeight) {
+                    params.push(`customHeight=${iosBannerConfig.customHeight}`);
+                }
+            } else {
+                // Use generic banner
+                if (iosBannerConfig.callToAction) {
+                    params.push(`callToAction=${encodeURIComponent(iosBannerConfig.callToAction)}`);
+                }
+                if (iosBannerConfig.checkoutTitle) {
+                    params.push(`checkoutTitle=${encodeURIComponent(iosBannerConfig.checkoutTitle)}`);
+                }
+                if (iosBannerConfig.checkoutSubtitle) {
+                    params.push(`checkoutSubtitle=${encodeURIComponent(iosBannerConfig.checkoutSubtitle)}`);
+                }
+                if (iosBannerConfig.price) {
+                    params.push(`price=${encodeURIComponent(iosBannerConfig.price)}`);
+                }
+                if (iosBannerConfig.canonicalWebPageURL) {
+                    params.push(`canonicalWebPageURL=${encodeURIComponent(iosBannerConfig.canonicalWebPageURL)}`);
+                }
+            }
+            
+            if (params.length > 0) {
+                return `${baseURL}#${params.join('&')}`;
+            }
+            return baseURL;
+        }
+
+        // Set the iOS source URL with banner parameters
+        const modelViewer = document.getElementById('model-viewer');
+        modelViewer.setAttribute('ios-src', buildIOSQuickLookURL());
+
+        // Listen for banner tap events
+        // Note: This requires the model-viewer to be wrapped in an anchor tag for iOS Quick Look
+        // For model-viewer, we need to listen on the model-viewer element itself
+        modelViewer.addEventListener('message', function(event) {
+            if (event.data === '_apple_ar_quicklook_button_tapped') {
+                console.log('iOS Quick Look banner tapped!');
+                // Handle banner tap - redirect or perform action
+                // You can customize this behavior
+                if (iosBannerConfig.canonicalWebPageURL) {
+                    // Optionally redirect or perform custom action
+                    // window.location.href = iosBannerConfig.canonicalWebPageURL;
+                }
+            }
+        }, false);
+
+        // Listen for AR session events
+        modelViewer.addEventListener('ar-status', function(event) {
+            console.log('AR Status:', event.detail.status);
+            const banner = document.getElementById('webxr-banner');
+            
+            // Show banner when WebXR AR session is active
+            // WebXR runs in browser, so we show banner when session starts
+            // Quick Look and Scene Viewer are native apps, so they won't trigger this
+            if (event.detail.status === 'session-started') {
+                // Check if it's WebXR by checking if we're still in the browser context
+                // WebXR will have the banner visible, native apps won't
+                setTimeout(() => {
+                    // Only show if still in browser (WebXR)
+                    if (document.visibilityState === 'visible') {
+                        banner.style.display = 'block';
+                    }
+                }, 100);
+            } else if (event.detail.status === 'not-presenting' || 
+                       event.detail.status === 'session-ended' ||
+                       event.detail.status === 'failed') {
+                banner.style.display = 'none';
+            }
+        });
+
+        // Update WebXR banner content
+        function updateWebXRBanner() {
+            const bannerTitle = document.querySelector('.banner-title');
+            const bannerSubtitle = document.querySelector('.banner-subtitle');
+            const bannerButton = document.getElementById('banner-action-button');
+            
+            if (bannerTitle) bannerTitle.textContent = webxrBannerConfig.title;
+            if (bannerSubtitle) bannerSubtitle.textContent = webxrBannerConfig.subtitle;
+            if (bannerButton) bannerButton.textContent = webxrBannerConfig.buttonText;
+        }
+
+        // Handle WebXR banner button click
+        const bannerButton = document.getElementById('banner-action-button');
+        if (bannerButton) {
+            bannerButton.addEventListener('click', function() {
+                if (webxrBannerConfig.onButtonClick && typeof webxrBannerConfig.onButtonClick === 'function') {
+                    webxrBannerConfig.onButtonClick();
+                } else if (webxrBannerConfig.actionURL) {
+                    window.location.href = webxrBannerConfig.actionURL;
+                }
+            });
+        }
+
+        // Initialize banner content
+        updateWebXRBanner();
+
+        // Monitor visibility changes to hide banner when user leaves (e.g., to native AR app)
+        document.addEventListener('visibilitychange', function() {
+            const banner = document.getElementById('webxr-banner');
+            if (document.hidden) {
+                // Page is hidden - likely user went to native AR app
+                banner.style.display = 'none';
+            }
+        });
+    </script>
 </body>
 </html>
 
