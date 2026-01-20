@@ -21,6 +21,8 @@
             ar-modes="webxr scene-viewer quick-look"
             ar-scale="auto"
             ar-placement="floor"
+            link="https://www.nescafe.com/mena/en-ae/recipes/nescafe-3in1-dalgona"
+            title="Discover 30 days of Nescafe recipes this Ramadan."
             camera-controls
             auto-rotate
             autoplay
@@ -39,20 +41,24 @@
                     <p>Loading 3D Model...</p>
                 </div>
             </div>
-        </model-viewer>
-        
-        <!-- WebXR Banner for Android -->
-        <div class="webxr-banner" id="webxr-banner">
-            <div class="banner-content">
-                <div class="banner-text">
-                    <h3 class="banner-title">Dalgona Coffee with Nescafe</h3>
-                    <p class="banner-subtitle">Discover 30 days of Nescafe recipes this Ramadan.</p>
+            
+            <!-- WebXR Banner for Android - Must be inside model-viewer -->
+            <div id="webxr-banner" class="webxr-banner">
+                <div class="banner-content">
+                    <div class="banner-text">
+                        <h3 class="banner-title">Dalgona Coffee with Nescafe</h3>
+                        <p class="banner-subtitle">Discover 30 days of Nescafe recipes this Ramadan.</p>
+                    </div>
+                    <a href="https://www.nescafe.com/mena/en-ae/recipes/nescafe-3in1-dalgona" 
+                       class="banner-button" 
+                       id="banner-action-button"
+                       target="_blank" 
+                       rel="noopener noreferrer">
+                        Try Now!
+                    </a>
                 </div>
-                <button class="banner-button" id="banner-action-button">
-                    Try Now!
-                </button>
             </div>
-        </div>
+        </model-viewer>
     </div>
 
     <script>
@@ -63,7 +69,7 @@
             checkoutTitle: "Dalgona Coffee with Nescafe",
             checkoutSubtitle: "Discover 30 days of Nescafe recipes this Ramadan.",
             price: "",
-            canonicalWebPageURL: window.location.href,
+            canonicalWebPageURL: "https://www.nescafe.com/mena/en-ae/recipes/nescafe-3in1-dalgona",
             
             // Custom HTML Banner Options (alternative to generic)
             // Uncomment to use custom HTML banner instead
@@ -73,17 +79,25 @@
 
         // WebXR Banner Configuration for Android
         const webxrBannerConfig = {
-            title: "Dalgona OneTake",
-            subtitle: "Experience this 3D model in AR",
-            buttonText: "Learn More",
-            actionURL: window.location.href, // URL to navigate to when button is clicked
-            // Custom action function (optional - overrides actionURL)
-            // onButtonClick: function() { console.log('Custom action'); }
+            title: "Dalgona Coffee with Nescafe",
+            subtitle: "Discover 30 days of Nescafe recipes this Ramadan.",
+            buttonText: "Try Now!",
+            actionURL: "https://www.nescafe.com/mena/en-ae/recipes/nescafe-3in1-dalgona"
         };
 
         // Build iOS USDZ URL with banner parameters
+        // CRITICAL: iOS Quick Look requires ABSOLUTE URLs for banner parameters to work
         function buildIOSQuickLookURL() {
-            const baseURL = "models/Dalgona-OneTake_0004.usdz";
+            let iosUrl = "models/Dalgona-OneTake_0004.usdz";
+            
+            // Convert relative path to absolute URL if needed
+            if (!iosUrl.startsWith('http://') && !iosUrl.startsWith('https://')) {
+                // Use current origin to create absolute URL
+                const baseUrl = window.location.origin;
+                const path = iosUrl.startsWith('/') ? iosUrl : `/${iosUrl}`;
+                iosUrl = `${baseUrl}${path}`;
+            }
+            
             const params = [];
             
             // Use custom HTML banner if specified
@@ -111,10 +125,12 @@
                 }
             }
             
+            // Append parameters to USDZ URL with #
             if (params.length > 0) {
-                return `${baseURL}#${params.join('&')}`;
+                iosUrl = `${iosUrl}#${params.join('&')}`;
             }
-            return baseURL;
+            
+            return iosUrl;
         }
 
         // Set the iOS source URL with banner parameters
@@ -138,24 +154,38 @@
 
         // Listen for AR session events
         modelViewer.addEventListener('ar-status', function(event) {
-            console.log('AR Status:', event.detail.status);
+            const status = event.detail.status;
+            const mode = event.detail.mode;
             const banner = document.getElementById('webxr-banner');
             
+            console.log('AR Status:', status, 'Mode:', mode);
+            
             // Show banner when WebXR AR session is active
-            // WebXR runs in browser, so we show banner when session starts
-            // Quick Look and Scene Viewer are native apps, so they won't trigger this
-            if (event.detail.status === 'session-started') {
-                // Check if it's WebXR by checking if we're still in the browser context
-                // WebXR will have the banner visible, native apps won't
-                setTimeout(() => {
-                    // Only show if still in browser (WebXR)
-                    if (document.visibilityState === 'visible') {
-                        banner.style.display = 'block';
-                    }
-                }, 100);
-            } else if (event.detail.status === 'not-presenting' || 
-                       event.detail.status === 'session-ended' ||
-                       event.detail.status === 'failed') {
+            // WebXR runs in browser, so HTML overlays work
+            // Quick Look and Scene Viewer are native apps, so HTML overlays don't work
+            if (status === 'session-started' || status === 'object-placed' || status === 'presenting') {
+                // Only show for WebXR mode (not Quick Look or Scene Viewer)
+                if (mode === 'webxr' || (!mode && status === 'presenting')) {
+                    // Use requestAnimationFrame to ensure overlay container is ready
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            banner.style.display = 'flex';
+                            banner.style.position = 'fixed';
+                            banner.style.bottom = '20px';
+                            banner.style.left = '50%';
+                            banner.style.transform = 'translateX(-50%)';
+                            banner.style.zIndex = '99999';
+                            banner.style.visibility = 'visible';
+                            banner.style.opacity = '1';
+                        });
+                    });
+                } else {
+                    // Hide for native AR apps (Quick Look, Scene Viewer)
+                    banner.style.display = 'none';
+                }
+            } else if (status === 'not-presenting' || 
+                       status === 'session-ended' ||
+                       status === 'failed') {
                 banner.style.display = 'none';
             }
         });
@@ -172,14 +202,11 @@
         }
 
         // Handle WebXR banner button click
-        const bannerButton = document.getElementById('banner-action-button');
-        if (bannerButton) {
-            bannerButton.addEventListener('click', function() {
-                if (webxrBannerConfig.onButtonClick && typeof webxrBannerConfig.onButtonClick === 'function') {
-                    webxrBannerConfig.onButtonClick();
-                } else if (webxrBannerConfig.actionURL) {
-                    window.location.href = webxrBannerConfig.actionURL;
-                }
+        // Prevent clicks on banner from bubbling to viewer
+        const banner = document.getElementById('webxr-banner');
+        if (banner) {
+            banner.addEventListener('click', function(event) {
+                event.stopPropagation();
             });
         }
 

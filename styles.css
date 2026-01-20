@@ -90,16 +90,27 @@ body {
 
 /* WebXR Banner Styles */
 .webxr-banner {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(10px);
-    padding: 16px 20px;
     display: none;
-    z-index: 1000;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 500px;
+    background: white;
+    padding: 16px 20px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    z-index: 99999;
+    pointer-events: auto;
+}
+
+/* Show when WebXR AR session is active */
+model-viewer[ar-status="session-started"] #webxr-banner,
+model-viewer[ar-status="object-placed"] #webxr-banner,
+model-viewer[ar-status="presenting"] #webxr-banner {
+    display: flex;
 }
 
 .banner-content {
@@ -116,7 +127,7 @@ body {
 }
 
 .banner-title {
-    color: white;
+    color: #333;
     font-size: 16px;
     font-weight: 600;
     margin: 0 0 4px 0;
@@ -126,12 +137,10 @@ body {
 }
 
 .banner-subtitle {
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 13px;
+    color: #666;
+    font-size: 14px;
     margin: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.4;
 }
 
 .banner-button {
@@ -148,6 +157,8 @@ body {
     transition: all 0.2s ease;
     position: relative;
     overflow: hidden;
+    text-decoration: none;
+    display: inline-block;
 }
 
 .banner-button::before {
