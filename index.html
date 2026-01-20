@@ -241,11 +241,25 @@
         }
 
         // Handle WebXR banner button click
-        // Prevent clicks on banner from bubbling to viewer
+        // Prevent clicks on banner from bubbling to viewer and triggering raycasts
         const banner = document.getElementById('webxr-banner');
         if (banner) {
-            banner.addEventListener('click', function(event) {
-                event.stopPropagation();
+            // Stop all events on banner from propagating
+            ['click', 'touchstart', 'touchend'].forEach(eventType => {
+                banner.addEventListener(eventType, function(event) {
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                }, { capture: true });
+            });
+        }
+        
+        // Also prevent console buttons from triggering raycasts
+        if (arConsole) {
+            ['click', 'touchstart', 'touchend'].forEach(eventType => {
+                arConsole.addEventListener(eventType, function(event) {
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                }, { capture: true });
             });
         }
 
@@ -511,9 +525,16 @@
         function handleARTouch(event) {
             if (!isInARMode) return;
             
-            // Prevent default to avoid conflicts
-            event.preventDefault();
-            event.stopPropagation();
+            // Don't interfere with UI elements (banner, console buttons)
+            const target = event.target;
+            if (target.closest('#webxr-banner') || target.closest('#ar-console')) {
+                return; // Let UI elements handle their own events
+            }
+            
+            // Only prevent default on touchstart, not touchend (touchend can't be cancelled during scroll)
+            if (event.type === 'touchstart' && event.cancelable) {
+                event.preventDefault();
+            }
             
             // Get touch/click coordinates
             let clientX, clientY;
@@ -574,9 +595,10 @@
                 addConsoleEntry('AR Mode Active - Touch detection enabled', 'success');
                 
                 // Add event listeners for AR touches
-                modelViewer.addEventListener('click', handleARTouch, { passive: false });
+                // Use touchstart for raycasting (more reliable, can be cancelled)
+                // Use click as fallback for mouse/pointer events
+                modelViewer.addEventListener('click', handleARTouch, { passive: true });
                 modelViewer.addEventListener('touchstart', handleARTouch, { passive: false });
-                modelViewer.addEventListener('touchend', handleARTouch, { passive: false });
             } else {
                 isInARMode = false;
                 
@@ -588,7 +610,6 @@
                 // Remove event listeners
                 modelViewer.removeEventListener('click', handleARTouch);
                 modelViewer.removeEventListener('touchstart', handleARTouch);
-                modelViewer.removeEventListener('touchend', handleARTouch);
                 
                 // Clean up ray visuals
                 rayLines.forEach(line => {
