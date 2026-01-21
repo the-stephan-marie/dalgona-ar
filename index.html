@@ -15,7 +15,7 @@
         <model-viewer
             id="model-viewer"
             src="models/Dalgona-OneTake_0004.glb"
-            ios-src=""
+            ios-src="models/Dalgona-OneTake_0004.usdz"
             alt="Dalgona OneTake Model"
             ar
             ar-modes="webxr scene-viewer quick-look"
@@ -60,16 +60,6 @@
             </div>
         </model-viewer>
         
-        <!-- On-screen Console for AR Touch Detection -->
-        <div id="ar-console" class="ar-console">
-            <div class="console-header">
-                <h3>AR Touch Console</h3>
-                <button id="console-clear" class="console-clear-btn">Clear</button>
-            </div>
-            <div id="console-content" class="console-content">
-                <div class="console-entry">Ready for AR touches...</div>
-            </div>
-        </div>
     </div>
 
     <script>
@@ -145,36 +135,39 @@
         }
 
         // Set the iOS source URL with banner parameters
-        // CRITICAL: Set ios-src after model-viewer is ready (like working implementation)
+        // CRITICAL: Set ios-src immediately so iOS can detect AR capability
         const modelViewer = document.getElementById('model-viewer');
         
-        // Wait for model-viewer to be ready before setting ios-src
-        if (modelViewer.loaded) {
-            modelViewer.setAttribute('ios-src', buildIOSQuickLookURL());
+        // Build iOS URL with banner parameters
+        const iosUrl = buildIOSQuickLookURL();
+        console.log('iOS Quick Look URL:', iosUrl);
+        console.log('Protocol:', window.location.protocol);
+        console.log('Host:', window.location.host);
+        
+        // Set ios-src immediately - iOS needs this to detect AR capability
+        // iOS Quick Look requires HTTPS (except localhost)
+        if (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            modelViewer.setAttribute('ios-src', iosUrl);
+            console.log('✅ ios-src set:', modelViewer.getAttribute('ios-src'));
         } else {
-            modelViewer.addEventListener('load', () => {
-                modelViewer.setAttribute('ios-src', buildIOSQuickLookURL());
-            }, { once: true });
+            console.warn('⚠️ iOS Quick Look requires HTTPS. Current protocol:', window.location.protocol);
+            // Still set it, but warn user
+            modelViewer.setAttribute('ios-src', iosUrl);
         }
         
-        // Also set it immediately as fallback
-        const iosUrl = buildIOSQuickLookURL();
-        console.log('=== iOS Quick Look Banner Debug ===');
-        console.log('iOS URL:', iosUrl);
-        console.log('URL includes #:', iosUrl.includes('#'));
-        console.log('URL includes callToAction:', iosUrl.includes('callToAction'));
-        console.log('URL includes canonicalWebPageURL:', iosUrl.includes('canonicalWebPageURL'));
-        console.log('Banner config:', iosBannerConfig);
-        modelViewer.setAttribute('ios-src', iosUrl);
-        
-        // Verify the attribute was set
-        setTimeout(() => {
-            const actualIosSrc = modelViewer.getAttribute('ios-src');
-            console.log('Actual ios-src attribute:', actualIosSrc);
-            if (actualIosSrc !== iosUrl) {
-                console.warn('⚠️ ios-src mismatch! Expected:', iosUrl, 'Got:', actualIosSrc);
+        // Verify AR availability
+        modelViewer.addEventListener('load', () => {
+            console.log('Model loaded. AR available:', modelViewer.arAvailable);
+            console.log('AR modes:', modelViewer.arModes);
+            console.log('Current ios-src:', modelViewer.getAttribute('ios-src'));
+            
+            // Update URL after load to ensure banner parameters are included
+            const updatedUrl = buildIOSQuickLookURL();
+            if (modelViewer.getAttribute('ios-src') !== updatedUrl) {
+                modelViewer.setAttribute('ios-src', updatedUrl);
+                console.log('Updated ios-src:', updatedUrl);
             }
-        }, 100);
+        }, { once: true });
 
         // Listen for banner tap events
         // Note: This requires the model-viewer to be wrapped in an anchor tag for iOS Quick Look
@@ -253,15 +246,6 @@
             });
         }
         
-        // Also prevent console buttons from triggering raycasts
-        if (arConsole) {
-            ['click', 'touchstart', 'touchend'].forEach(eventType => {
-                arConsole.addEventListener(eventType, function(event) {
-                    event.stopPropagation();
-                    event.stopImmediatePropagation();
-                }, { capture: true });
-            });
-        }
 
         // Initialize banner content
         updateWebXRBanner();
@@ -313,24 +297,6 @@
         let isInARMode = false;
         let hierarchyNodes = [];
         
-        // Console elements - ensure they exist
-        const arConsole = document.getElementById('ar-console');
-        const consoleContent = document.getElementById('console-content');
-        const consoleClearBtn = document.getElementById('console-clear');
-        
-        // Debug: Log console element status
-        console.log('=== Console Elements Debug ===');
-        console.log('arConsole element:', arConsole);
-        console.log('consoleContent element:', consoleContent);
-        console.log('consoleClearBtn element:', consoleClearBtn);
-        
-        if (!arConsole) {
-            console.error('❌ AR Console element not found!');
-        }
-        if (!consoleContent) {
-            console.error('❌ Console content element not found!');
-        }
-        
         // Initialize Three.js and raycasting
         async function initializeRaycasting() {
             if (!window.THREE) {
@@ -342,7 +308,6 @@
             
             raycaster = new THREE.Raycaster();
             console.log('✅ Three.js and Raycaster initialized');
-            addConsoleEntry('✅ Raycasting initialized', 'success');
         }
         
         // Setup hit detection when model loads
@@ -376,9 +341,6 @@
                     const hierarchy = modelViewer.model[hierarchySym];
                     hierarchyNodes = hierarchy.filter(node => node.mesh);
                     console.log('✅ Found', hierarchyNodes.length, 'nodes with meshes');
-                    if (arConsole && arConsole.style.display !== 'none') {
-                        addConsoleEntry(`✅ Found ${hierarchyNodes.length} interactive objects`, 'success');
-                    }
                     
                     // Get scene and camera from model-viewer - try multiple times if needed
                     function getSceneAndCamera() {
@@ -404,9 +366,6 @@
                 }
             } catch (error) {
                 console.error('Error setting up hit detection:', error);
-                if (arConsole && arConsole.style.display !== 'none') {
-                    addConsoleEntry('❌ Error setting up hit detection: ' + error.message, 'error');
-                }
             }
         }
         
@@ -516,46 +475,13 @@
             return line;
         }
         
-        // Add entry to console
-        function addConsoleEntry(message, type = 'info') {
-            if (!consoleContent) {
-                console.warn('Console content not available:', message);
-                return;
-            }
-            
-            try {
-                const entry = document.createElement('div');
-                entry.className = `console-entry console-${type}`;
-                entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-                consoleContent.insertBefore(entry, consoleContent.firstChild);
-                
-                // Keep only last 20 entries
-                while (consoleContent.children.length > 20) {
-                    consoleContent.removeChild(consoleContent.lastChild);
-                }
-            } catch (error) {
-                console.error('Error adding console entry:', error);
-            }
-        }
-        
-        // Clear console
-        if (consoleClearBtn) {
-            consoleClearBtn.addEventListener('click', () => {
-                if (consoleContent) {
-                    consoleContent.innerHTML = '<div class="console-entry">Console cleared...</div>';
-                }
-            });
-        } else {
-            console.warn('Console clear button not found');
-        }
-        
         // Handle touches/clicks in AR mode
         function handleARTouch(event) {
             if (!isInARMode) return;
             
-            // Don't interfere with UI elements (banner, console buttons)
+            // Don't interfere with UI elements (banner)
             const target = event.target;
-            if (target.closest('#webxr-banner') || target.closest('#ar-console')) {
+            if (target.closest('#webxr-banner')) {
                 return; // Let UI elements handle their own events
             }
             
@@ -586,9 +512,7 @@
                 const hitPoint = hit.point;
                 createRayVisual(cameraPos, hitPoint, true);
                 
-                // Log to console
-                addConsoleEntry(`✅ HIT: ${hit.name} (distance: ${hit.distance.toFixed(2)}m)`, 'success');
-                console.log('🎯 AR Touch Hit:', hit);
+                console.log('🎯 AR Touch Hit:', hit.name, 'distance:', hit.distance.toFixed(2) + 'm');
             } else {
                 // Miss - create ray to far point
                 if (camera && scene) {
@@ -598,7 +522,7 @@
                     const farPoint = cameraPos.clone().add(direction.multiplyScalar(10));
                     createRayVisual(cameraPos, farPoint, false);
                     
-                    addConsoleEntry('❌ MISS: No object hit', 'error');
+                    console.log('❌ AR Touch Miss: No object hit');
                 }
             }
         }
@@ -608,36 +532,9 @@
         modelViewer.addEventListener('ar-status', (event) => {
             const status = event.detail.status;
             
-            console.log('AR Status Event:', status, 'arConsole exists:', !!arConsole);
-            
             // Enable whenever AR is active - don't check mode
             if (status === 'presenting' || status === 'session-started' || status === 'object-placed') {
                 isInARMode = true;
-                
-                // Show console - force it to be visible
-                if (arConsole) {
-                    console.log('Showing AR console...');
-                    arConsole.style.display = 'block';
-                    arConsole.style.position = 'fixed';
-                    arConsole.style.top = '20px';
-                    arConsole.style.right = '20px';
-                    arConsole.style.zIndex = '100001';
-                    arConsole.style.visibility = 'visible';
-                    arConsole.style.opacity = '1';
-                    arConsole.style.pointerEvents = 'auto';
-                    
-                    // Force visibility with !important via setProperty
-                    arConsole.style.setProperty('display', 'block', 'important');
-                    arConsole.style.setProperty('visibility', 'visible', 'important');
-                    arConsole.style.setProperty('opacity', '1', 'important');
-                    
-                    console.log('Console display after setting:', window.getComputedStyle(arConsole).display);
-                    console.log('Console visibility:', window.getComputedStyle(arConsole).visibility);
-                } else {
-                    console.error('❌ arConsole element is null! Cannot show console.');
-                }
-                
-                addConsoleEntry('AR Mode Active - Touch detection enabled', 'success');
                 
                 // Add event listeners for AR touches
                 // Use touchstart for raycasting (more reliable, can be cancelled)
@@ -646,11 +543,6 @@
                 modelViewer.addEventListener('touchstart', handleARTouch, { passive: false });
             } else {
                 isInARMode = false;
-                
-                // Hide console
-                if (arConsole) {
-                    arConsole.style.display = 'none';
-                }
                 
                 // Remove event listeners
                 modelViewer.removeEventListener('click', handleARTouch);
@@ -670,50 +562,6 @@
         
         // Initialize raycasting on page load
         initializeRaycasting();
-        
-        // Test: Show console immediately for debugging (remove this after confirming it works)
-        // This helps verify the console can be displayed at all
-        setTimeout(() => {
-            console.log('=== Testing Console Visibility ===');
-            if (arConsole) {
-                console.log('Console element found, attempting to show for testing...');
-                
-                // Force show console for testing
-                arConsole.style.display = 'block';
-                arConsole.style.setProperty('display', 'block', 'important');
-                arConsole.style.visibility = 'visible';
-                arConsole.style.opacity = '1';
-                arConsole.style.position = 'fixed';
-                arConsole.style.top = '20px';
-                arConsole.style.right = '20px';
-                arConsole.style.zIndex = '100001';
-                
-                const computed = window.getComputedStyle(arConsole);
-                console.log('Console computed display:', computed.display);
-                console.log('Console computed visibility:', computed.visibility);
-                console.log('Console computed opacity:', computed.opacity);
-                console.log('Console computed z-index:', computed.zIndex);
-                console.log('Console offsetHeight:', arConsole.offsetHeight);
-                console.log('Console offsetWidth:', arConsole.offsetWidth);
-                console.log('Console getBoundingClientRect:', arConsole.getBoundingClientRect());
-                
-                // Add a test entry
-                addConsoleEntry('Console test - If you see this, console is working!', 'info');
-                addConsoleEntry('Check browser console for detailed debug info', 'info');
-                
-                // Hide after 5 seconds (for testing - remove this timeout in production)
-                setTimeout(() => {
-                    if (!isInARMode) {
-                        arConsole.style.display = 'none';
-                        console.log('Hiding test console (not in AR mode)');
-                    }
-                }, 5000);
-            } else {
-                console.error('❌ Console element NOT FOUND in DOM!');
-                console.error('Document body:', document.body);
-                console.error('Model container:', document.querySelector('.model-container'));
-            }
-        }, 2000);
         
         // ============================================
         // FIX ARIA-HIDDEN WARNING ON WEBXR EXIT BUTTON
