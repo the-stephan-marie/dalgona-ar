@@ -61,17 +61,6 @@
         </model-viewer>
     </div>
 
-    <!-- AR Session Console -->
-    <div id="ar-console" class="ar-console">
-        <div class="console-header">
-            <h3>AR Session Tracker</h3>
-            <button id="console-toggle" class="console-toggle-btn" aria-label="Toggle console">−</button>
-        </div>
-        <div id="console-content" class="console-content">
-            <div class="console-entry console-info">Waiting for AR session...</div>
-        </div>
-    </div>
-
     <script>
         // iOS Quick Look Banner Configuration
         const iosBannerConfig = {
@@ -164,32 +153,12 @@
         
         // Also set it immediately as fallback
         const iosUrl = buildIOSQuickLookURL();
-        console.log('=== iOS Quick Look Banner Debug ===');
-        console.log('iOS URL:', iosUrl);
-        console.log('URL includes #:', iosUrl.includes('#'));
-        console.log('URL includes callToAction:', iosUrl.includes('callToAction'));
-        console.log('URL includes canonicalWebPageURL:', iosUrl.includes('canonicalWebPageURL'));
-        console.log('Banner config:', iosBannerConfig);
         modelViewer.setAttribute('ios-src', iosUrl);
-        
-        // Verify the attribute was set
-        setTimeout(() => {
-            const actualIosSrc = modelViewer.getAttribute('ios-src');
-            console.log('Actual ios-src attribute:', actualIosSrc);
-            if (actualIosSrc !== iosUrl) {
-                console.warn('⚠️ ios-src mismatch! Expected:', iosUrl, 'Got:', actualIosSrc);
-            }
-        }, 100);
 
         // Listen for banner tap events
-        // Note: This requires the model-viewer to be wrapped in an anchor tag for iOS Quick Look
-        // For model-viewer, we need to listen on the model-viewer element itself
         modelViewer.addEventListener('message', function(event) {
             if (event.data === '_apple_ar_quicklook_button_tapped') {
-                addConsoleEntry('iOS Quick Look banner tapped', 'success');
-                console.log('iOS Quick Look banner tapped!');
                 // Handle banner tap - redirect or perform action
-                // You can customize this behavior
                 if (iosBannerConfig.canonicalWebPageURL) {
                     // Optionally redirect or perform custom action
                     // window.location.href = iosBannerConfig.canonicalWebPageURL;
@@ -197,130 +166,21 @@
             }
         }, false);
 
-        // ============================================
-        // ON-SCREEN CONSOLE FOR AR SESSION TRACKING
-        // ============================================
-        
-        const arConsole = document.getElementById('ar-console');
-        const consoleContent = document.getElementById('console-content');
-        const consoleToggleBtn = document.getElementById('console-toggle');
-        let consoleVisible = false;
-        const MAX_CONSOLE_ENTRIES = 50;
-        
-        function addConsoleEntry(message, type = 'info') {
-            if (!consoleContent) return;
-            
-            const entry = document.createElement('div');
-            entry.className = `console-entry console-${type}`;
-            
-            const timestamp = new Date().toLocaleTimeString();
-            const timestampSpan = document.createElement('span');
-            timestampSpan.className = 'log-timestamp';
-            timestampSpan.textContent = `[${timestamp}]`;
-            
-            const messageSpan = document.createElement('span');
-            if (typeof message === 'object') {
-                messageSpan.textContent = JSON.stringify(message, null, 2);
-            } else {
-                messageSpan.textContent = String(message);
-            }
-            
-            entry.appendChild(timestampSpan);
-            entry.appendChild(messageSpan);
-            consoleContent.insertBefore(entry, consoleContent.firstChild);
-            
-            // Keep only last N entries
-            const entries = consoleContent.querySelectorAll('.console-entry');
-            if (entries.length > MAX_CONSOLE_ENTRIES) {
-                entries[entries.length - 1].remove();
-            }
-            
-            // Auto-scroll to top (newest entries)
-            consoleContent.scrollTop = 0;
-        }
-        
-        function toggleConsole() {
-            if (!arConsole) return;
-            
-            consoleVisible = !consoleVisible;
-            
-            if (consoleVisible) {
-                arConsole.classList.add('console-expanded');
-                consoleToggleBtn.textContent = '−';
-                consoleToggleBtn.setAttribute('aria-label', 'Hide console');
-            } else {
-                arConsole.classList.remove('console-expanded');
-                consoleToggleBtn.textContent = '+';
-                consoleToggleBtn.setAttribute('aria-label', 'Show console');
-            }
-        }
-        
-        // Initialize console toggle
-        if (consoleToggleBtn) {
-            consoleToggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleConsole();
-            });
-        }
-        
-        // Make console header clickable to toggle
-        const consoleHeader = arConsole?.querySelector('.console-header');
-        if (consoleHeader) {
-            consoleHeader.addEventListener('click', (e) => {
-                if (e.target !== consoleToggleBtn && !consoleToggleBtn.contains(e.target)) {
-                    e.stopPropagation();
-                    toggleConsole();
-                }
-            });
-        }
-        
-        // Prevent console clicks from interfering with AR
-        if (arConsole) {
-            ['click', 'touchstart', 'touchend'].forEach(eventType => {
-                arConsole.addEventListener(eventType, function(event) {
-                    event.stopPropagation();
-                }, { capture: true });
-            });
-        }
-        
-        // Initial console entry
-        addConsoleEntry('AR Session Tracker initialized', 'info');
-
         // Listen for AR session events
         modelViewer.addEventListener('ar-status', function(event) {
             const status = event.detail.status;
             const mode = event.detail.mode || 'unknown';
             const banner = document.getElementById('webxr-banner');
             
-            // Log to on-screen console
-            addConsoleEntry(`AR Status: ${status} | Mode: ${mode}`, 'info');
-            
-            console.log('AR Status:', status, 'Mode:', mode, 'Banner element:', banner);
-            
             // Show banner when WebXR AR session is active
-            // WebXR runs in browser, so HTML overlays work
-            // Quick Look and Scene Viewer are native apps, so HTML overlays don't work
             if (status === 'session-started' || status === 'object-placed' || status === 'presenting') {
                 // Check if it's WebXR mode
                 const isWebXR = mode === 'webxr' || (!mode && status === 'presenting');
-                
-                console.log('AR active - isWebXR:', isWebXR, 'status:', status, 'mode:', mode);
-                
-                // Log to console
-                if (status === 'session-started') {
-                    addConsoleEntry('✅ AR session started', 'success');
-                } else if (status === 'object-placed') {
-                    addConsoleEntry('✅ AR object placed', 'success');
-                } else if (status === 'presenting') {
-                    addConsoleEntry('✅ AR presenting', 'success');
-                }
                 
                 if (isWebXR && banner) {
                     // Use requestAnimationFrame to ensure overlay container is ready
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
-                            addConsoleEntry('Showing WebXR banner overlay', 'info');
-                            console.log('Showing WebXR banner');
                             banner.style.display = 'flex';
                             banner.style.position = 'fixed';
                             banner.style.bottom = '20px';
@@ -339,19 +199,11 @@
                     });
                 } else {
                     // Hide for native AR apps (Quick Look, Scene Viewer)
-                    addConsoleEntry(`Native AR mode (${mode}) - HTML overlays not available`, 'warn');
-                    console.log('Hiding banner - not WebXR mode');
                     if (banner) banner.style.display = 'none';
                 }
-            } else if (status === 'not-presenting') {
-                addConsoleEntry('AR session ended - not presenting', 'info');
-                console.log('Hiding banner - AR session ended');
-                if (banner) banner.style.display = 'none';
-            } else if (status === 'session-ended') {
-                addConsoleEntry('AR session ended', 'info');
-                if (banner) banner.style.display = 'none';
-            } else if (status === 'failed') {
-                addConsoleEntry('❌ AR session failed', 'error');
+            } else if (status === 'not-presenting' || 
+                       status === 'session-ended' ||
+                       status === 'failed') {
                 if (banner) banner.style.display = 'none';
             }
         });
@@ -379,15 +231,6 @@
         // Initialize banner content
         updateWebXRBanner();
         
-        // Debug: Log banner setup
-        const bannerElement = document.getElementById('webxr-banner');
-        console.log('=== WebXR Banner Debug ===');
-        console.log('Banner element:', bannerElement);
-        console.log('Banner parent:', bannerElement?.parentElement);
-        console.log('Banner is inside model-viewer:', modelViewer.contains(bannerElement));
-        console.log('Banner computed display:', bannerElement ? window.getComputedStyle(bannerElement).display : 'N/A');
-        console.log('Model viewer AR available:', modelViewer.arAvailable);
-        console.log('Model viewer AR modes:', modelViewer.arModes);
 
         // Monitor visibility changes to hide banner when user leaves (e.g., to native AR app)
         document.addEventListener('visibilitychange', function() {
@@ -401,8 +244,6 @@
         // Additional check: Monitor AR mode changes
         modelViewer.addEventListener('ar-mode', function(event) {
             const mode = event.detail;
-            addConsoleEntry(`AR Mode changed: ${mode}`, 'info');
-            console.log('AR Mode changed:', mode);
             const banner = document.getElementById('webxr-banner');
             if (mode === 'webxr' && banner) {
                 // Ensure banner is visible for WebXR
@@ -413,12 +254,6 @@
                     }
                 }, 100);
             }
-        });
-        
-        // Log AR availability on load
-        modelViewer.addEventListener('load', () => {
-            addConsoleEntry(`Model loaded | AR Available: ${modelViewer.arAvailable}`, 'info');
-            addConsoleEntry(`AR Modes: ${modelViewer.arModes?.join(', ') || 'none'}`, 'info');
         });
     </script>
 </body>
