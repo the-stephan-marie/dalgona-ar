@@ -60,6 +60,16 @@
             </div>
         </model-viewer>
         
+        <!-- AR Console - Bottom Half, Toggleable -->
+        <div id="ar-console" class="ar-console">
+            <div class="console-header">
+                <h3>AR Touch Console</h3>
+                <button id="console-toggle" class="console-toggle-btn" aria-label="Toggle console">−</button>
+            </div>
+            <div id="console-content" class="console-content">
+                <div class="console-entry">Ready for AR touches...</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -296,6 +306,78 @@
         let rayLines = [];
         let isInARMode = false;
         let hierarchyNodes = [];
+        let consoleVisible = false;
+        
+        // Console elements
+        const arConsole = document.getElementById('ar-console');
+        const consoleContent = document.getElementById('console-content');
+        const consoleToggleBtn = document.getElementById('console-toggle');
+        
+        // Add entry to console
+        function addConsoleEntry(message, type = 'info') {
+            if (!consoleContent) return;
+            
+            try {
+                const entry = document.createElement('div');
+                entry.className = `console-entry console-${type}`;
+                entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                consoleContent.insertBefore(entry, consoleContent.firstChild);
+                
+                // Keep only last 50 entries
+                while (consoleContent.children.length > 50) {
+                    consoleContent.removeChild(consoleContent.lastChild);
+                }
+            } catch (error) {
+                console.error('Error adding console entry:', error);
+            }
+        }
+        
+        // Toggle console visibility
+        function toggleConsole() {
+            if (!arConsole) return;
+            
+            consoleVisible = !consoleVisible;
+            
+            if (consoleVisible) {
+                arConsole.classList.add('console-expanded');
+                consoleToggleBtn.textContent = '−';
+                consoleToggleBtn.setAttribute('aria-label', 'Hide console');
+            } else {
+                arConsole.classList.remove('console-expanded');
+                consoleToggleBtn.textContent = '+';
+                consoleToggleBtn.setAttribute('aria-label', 'Show console');
+            }
+        }
+        
+        // Initialize toggle button and header
+        if (consoleToggleBtn) {
+            consoleToggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleConsole();
+            });
+        }
+        
+        // Make console header clickable to toggle
+        const consoleHeader = arConsole?.querySelector('.console-header');
+        if (consoleHeader) {
+            consoleHeader.addEventListener('click', (e) => {
+                // Don't toggle if clicking the button itself
+                if (e.target !== consoleToggleBtn && !consoleToggleBtn.contains(e.target)) {
+                    e.stopPropagation();
+                    toggleConsole();
+                }
+            });
+        }
+        
+        // Prevent console clicks from triggering raycasts
+        if (arConsole) {
+            ['click', 'touchstart', 'touchend'].forEach(eventType => {
+                arConsole.addEventListener(eventType, function(event) {
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                }, { capture: true });
+            });
+        }
         
         // Initialize Three.js and raycasting
         async function initializeRaycasting() {
@@ -308,6 +390,7 @@
             
             raycaster = new THREE.Raycaster();
             console.log('✅ Three.js and Raycaster initialized');
+            addConsoleEntry('✅ Raycasting initialized', 'success');
         }
         
         // Setup hit detection when model loads
@@ -341,6 +424,7 @@
                     const hierarchy = modelViewer.model[hierarchySym];
                     hierarchyNodes = hierarchy.filter(node => node.mesh);
                     console.log('✅ Found', hierarchyNodes.length, 'nodes with meshes');
+                    addConsoleEntry(`✅ Found ${hierarchyNodes.length} interactive objects`, 'success');
                     
                     // Get scene and camera from model-viewer - try multiple times if needed
                     function getSceneAndCamera() {
@@ -479,9 +563,9 @@
         function handleARTouch(event) {
             if (!isInARMode) return;
             
-            // Don't interfere with UI elements (banner)
+            // Don't interfere with UI elements (banner, console)
             const target = event.target;
-            if (target.closest('#webxr-banner')) {
+            if (target.closest('#webxr-banner') || target.closest('#ar-console')) {
                 return; // Let UI elements handle their own events
             }
             
@@ -512,7 +596,9 @@
                 const hitPoint = hit.point;
                 createRayVisual(cameraPos, hitPoint, true);
                 
+                const hitMessage = `✅ HIT: ${hit.name} (distance: ${hit.distance.toFixed(2)}m)`;
                 console.log('🎯 AR Touch Hit:', hit.name, 'distance:', hit.distance.toFixed(2) + 'm');
+                addConsoleEntry(hitMessage, 'success');
             } else {
                 // Miss - create ray to far point
                 if (camera && scene) {
@@ -523,6 +609,7 @@
                     createRayVisual(cameraPos, farPoint, false);
                     
                     console.log('❌ AR Touch Miss: No object hit');
+                    addConsoleEntry('❌ MISS: No object hit', 'error');
                 }
             }
         }
@@ -536,6 +623,17 @@
             if (status === 'presenting' || status === 'session-started' || status === 'object-placed') {
                 isInARMode = true;
                 
+                // Show console when AR is active
+                if (arConsole) {
+                    arConsole.classList.add('console-active');
+                    if (!consoleVisible) {
+                        // Show collapsed by default
+                        arConsole.classList.remove('console-expanded');
+                    }
+                }
+                
+                addConsoleEntry('AR Mode Active - Touch detection enabled', 'success');
+                
                 // Add event listeners for AR touches
                 // Use touchstart for raycasting (more reliable, can be cancelled)
                 // Use click as fallback for mouse/pointer events
@@ -543,6 +641,11 @@
                 modelViewer.addEventListener('touchstart', handleARTouch, { passive: false });
             } else {
                 isInARMode = false;
+                
+                // Hide console when AR ends
+                if (arConsole) {
+                    arConsole.classList.remove('console-active');
+                }
                 
                 // Remove event listeners
                 modelViewer.removeEventListener('click', handleARTouch);
