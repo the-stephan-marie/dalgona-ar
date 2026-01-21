@@ -313,10 +313,23 @@
         let isInARMode = false;
         let hierarchyNodes = [];
         
-        // Console elements
+        // Console elements - ensure they exist
         const arConsole = document.getElementById('ar-console');
         const consoleContent = document.getElementById('console-content');
         const consoleClearBtn = document.getElementById('console-clear');
+        
+        // Debug: Log console element status
+        console.log('=== Console Elements Debug ===');
+        console.log('arConsole element:', arConsole);
+        console.log('consoleContent element:', consoleContent);
+        console.log('consoleClearBtn element:', consoleClearBtn);
+        
+        if (!arConsole) {
+            console.error('❌ AR Console element not found!');
+        }
+        if (!consoleContent) {
+            console.error('❌ Console content element not found!');
+        }
         
         // Initialize Three.js and raycasting
         async function initializeRaycasting() {
@@ -505,21 +518,36 @@
         
         // Add entry to console
         function addConsoleEntry(message, type = 'info') {
-            const entry = document.createElement('div');
-            entry.className = `console-entry console-${type}`;
-            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
-            consoleContent.insertBefore(entry, consoleContent.firstChild);
+            if (!consoleContent) {
+                console.warn('Console content not available:', message);
+                return;
+            }
             
-            // Keep only last 20 entries
-            while (consoleContent.children.length > 20) {
-                consoleContent.removeChild(consoleContent.lastChild);
+            try {
+                const entry = document.createElement('div');
+                entry.className = `console-entry console-${type}`;
+                entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                consoleContent.insertBefore(entry, consoleContent.firstChild);
+                
+                // Keep only last 20 entries
+                while (consoleContent.children.length > 20) {
+                    consoleContent.removeChild(consoleContent.lastChild);
+                }
+            } catch (error) {
+                console.error('Error adding console entry:', error);
             }
         }
         
         // Clear console
-        consoleClearBtn.addEventListener('click', () => {
-            consoleContent.innerHTML = '<div class="console-entry">Console cleared...</div>';
-        });
+        if (consoleClearBtn) {
+            consoleClearBtn.addEventListener('click', () => {
+                if (consoleContent) {
+                    consoleContent.innerHTML = '<div class="console-entry">Console cleared...</div>';
+                }
+            });
+        } else {
+            console.warn('Console clear button not found');
+        }
         
         // Handle touches/clicks in AR mode
         function handleARTouch(event) {
@@ -580,16 +608,33 @@
         modelViewer.addEventListener('ar-status', (event) => {
             const status = event.detail.status;
             
+            console.log('AR Status Event:', status, 'arConsole exists:', !!arConsole);
+            
             // Enable whenever AR is active - don't check mode
             if (status === 'presenting' || status === 'session-started' || status === 'object-placed') {
                 isInARMode = true;
                 
-                // Show console
+                // Show console - force it to be visible
                 if (arConsole) {
+                    console.log('Showing AR console...');
                     arConsole.style.display = 'block';
+                    arConsole.style.position = 'fixed';
+                    arConsole.style.top = '20px';
+                    arConsole.style.right = '20px';
                     arConsole.style.zIndex = '100001';
                     arConsole.style.visibility = 'visible';
                     arConsole.style.opacity = '1';
+                    arConsole.style.pointerEvents = 'auto';
+                    
+                    // Force visibility with !important via setProperty
+                    arConsole.style.setProperty('display', 'block', 'important');
+                    arConsole.style.setProperty('visibility', 'visible', 'important');
+                    arConsole.style.setProperty('opacity', '1', 'important');
+                    
+                    console.log('Console display after setting:', window.getComputedStyle(arConsole).display);
+                    console.log('Console visibility:', window.getComputedStyle(arConsole).visibility);
+                } else {
+                    console.error('❌ arConsole element is null! Cannot show console.');
                 }
                 
                 addConsoleEntry('AR Mode Active - Touch detection enabled', 'success');
@@ -625,6 +670,142 @@
         
         // Initialize raycasting on page load
         initializeRaycasting();
+        
+        // Test: Show console immediately for debugging (remove this after confirming it works)
+        // This helps verify the console can be displayed at all
+        setTimeout(() => {
+            console.log('=== Testing Console Visibility ===');
+            if (arConsole) {
+                console.log('Console element found, attempting to show for testing...');
+                
+                // Force show console for testing
+                arConsole.style.display = 'block';
+                arConsole.style.setProperty('display', 'block', 'important');
+                arConsole.style.visibility = 'visible';
+                arConsole.style.opacity = '1';
+                arConsole.style.position = 'fixed';
+                arConsole.style.top = '20px';
+                arConsole.style.right = '20px';
+                arConsole.style.zIndex = '100001';
+                
+                const computed = window.getComputedStyle(arConsole);
+                console.log('Console computed display:', computed.display);
+                console.log('Console computed visibility:', computed.visibility);
+                console.log('Console computed opacity:', computed.opacity);
+                console.log('Console computed z-index:', computed.zIndex);
+                console.log('Console offsetHeight:', arConsole.offsetHeight);
+                console.log('Console offsetWidth:', arConsole.offsetWidth);
+                console.log('Console getBoundingClientRect:', arConsole.getBoundingClientRect());
+                
+                // Add a test entry
+                addConsoleEntry('Console test - If you see this, console is working!', 'info');
+                addConsoleEntry('Check browser console for detailed debug info', 'info');
+                
+                // Hide after 5 seconds (for testing - remove this timeout in production)
+                setTimeout(() => {
+                    if (!isInARMode) {
+                        arConsole.style.display = 'none';
+                        console.log('Hiding test console (not in AR mode)');
+                    }
+                }, 5000);
+            } else {
+                console.error('❌ Console element NOT FOUND in DOM!');
+                console.error('Document body:', document.body);
+                console.error('Model container:', document.querySelector('.model-container'));
+            }
+        }, 2000);
+        
+        // ============================================
+        // FIX ARIA-HIDDEN WARNING ON WEBXR EXIT BUTTON
+        // ============================================
+        // Model-viewer tries to set aria-hidden on the exit button while it has focus
+        // This violates accessibility rules. We'll monitor and fix this.
+        
+        let exitButtonObserver = null;
+        
+        function fixAriaHiddenWarning() {
+            // Find the WebXR exit button (model-viewer creates it dynamically)
+            const exitButton = document.querySelector('#default-exit-webxr-ar-button') ||
+                              document.querySelector('[id*="exit"][id*="webxr"]') ||
+                              document.querySelector('[id*="exit"][id*="ar"]');
+            
+            if (!exitButton) {
+                // Button not found yet, try again later
+                return false;
+            }
+            
+            // If we already have an observer, disconnect it
+            if (exitButtonObserver) {
+                exitButtonObserver.disconnect();
+            }
+            
+            // Monitor for aria-hidden being set
+            exitButtonObserver = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'aria-hidden') {
+                        const isAriaHidden = exitButton.getAttribute('aria-hidden') === 'true';
+                        const hasFocus = document.activeElement === exitButton;
+                        
+                        // If button has focus but aria-hidden is set, remove aria-hidden
+                        // This prevents the accessibility warning
+                        if (isAriaHidden && hasFocus) {
+                            exitButton.removeAttribute('aria-hidden');
+                        }
+                    }
+                });
+            });
+            
+            // Observe the exit button for attribute changes
+            exitButtonObserver.observe(exitButton, {
+                attributes: true,
+                attributeFilter: ['aria-hidden']
+            });
+            
+            // Also handle focus events
+            exitButton.addEventListener('focus', () => {
+                const isAriaHidden = exitButton.getAttribute('aria-hidden') === 'true';
+                if (isAriaHidden) {
+                    exitButton.removeAttribute('aria-hidden');
+                }
+            }, { passive: true });
+            
+            return true;
+        }
+        
+        // Try to fix the issue when AR status changes
+        modelViewer.addEventListener('ar-status', () => {
+            // Wait for model-viewer to create the exit button
+            let attempts = 0;
+            const maxAttempts = 10;
+            const tryFix = () => {
+                if (!fixAriaHiddenWarning() && attempts < maxAttempts) {
+                    attempts++;
+                    setTimeout(tryFix, 200);
+                }
+            };
+            setTimeout(tryFix, 300);
+        });
+        
+        // Also try on load and periodically
+        const tryFixOnLoad = () => {
+            let attempts = 0;
+            const maxAttempts = 5;
+            const tryFix = () => {
+                if (!fixAriaHiddenWarning() && attempts < maxAttempts) {
+                    attempts++;
+                    setTimeout(tryFix, 500);
+                }
+            };
+            tryFix();
+        };
+        
+        if (modelViewer.loaded) {
+            setTimeout(tryFixOnLoad, 1000);
+        } else {
+            modelViewer.addEventListener('load', () => {
+                setTimeout(tryFixOnLoad, 1000);
+            });
+        }
     </script>
 </body>
 </html>
