@@ -20,7 +20,7 @@ body {
 
 .ar-button {
     position: absolute;
-    bottom: 120px;
+    bottom: 200px;
     left: 50%;
     transform: translateX(-50%);
     background: #dc2626;
